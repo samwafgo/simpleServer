@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"os"
 	"sync"
+	"time"
 )
 
 func main() {
@@ -17,11 +18,14 @@ func main() {
 	ports := os.Args[1:]
 
 	var wg sync.WaitGroup
-
+	longTime := false
 	// 为每个端口创建一个服务
 	for _, port := range ports {
 		wg.Add(1)
 		go func(port string) {
+			if port == "longtime" {
+				longTime = true
+			}
 			defer wg.Done()
 			// 创建 Gin 路由
 			r := gin.Default()
@@ -45,12 +49,20 @@ func main() {
 
 				// 打印响应信息
 				fmt.Printf("响应信息: %+v\n", responseData)
+
+				if longTime {
+					fmt.Printf("准备休眠: 300s \n")
+					//给一个长久的时间sleep
+					time.Sleep(time.Duration(300) * time.Second)
+				}
 			})
 
-			// 启动服务器
-			err := r.Run(":" + port)
-			if err != nil {
-				fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
+			if port != "longtime" {
+				// 启动服务器
+				err := r.Run(":" + port)
+				if err != nil {
+					fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
+				}
 			}
 		}(port)
 	}
