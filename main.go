@@ -19,6 +19,15 @@ func main() {
 
 	var wg sync.WaitGroup
 	longTime := false
+
+	// 创建设置Server头的中间件
+	setServerHeader := func() gin.HandlerFunc {
+		return func(c *gin.Context) {
+			c.Writer.Header().Set("Server", "SamWaf TestServer")
+			c.Next()
+		}
+	}
+
 	// 为每个端口创建一个服务
 	for _, port := range ports {
 		wg.Add(1)
@@ -29,7 +38,8 @@ func main() {
 			defer wg.Done()
 			// 创建 Gin 路由
 			r := gin.Default()
-
+			// 应用中间件
+			r.Use(setServerHeader())
 			// 定义路由，返回端口号并打印请求和响应信息
 			r.GET("/", func(c *gin.Context) {
 				requestInfo := gin.H{
