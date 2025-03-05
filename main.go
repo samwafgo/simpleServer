@@ -24,6 +24,7 @@ func main() {
 	setServerHeader := func() gin.HandlerFunc {
 		return func(c *gin.Context) {
 			c.Writer.Header().Set("Server", "SamWaf TestServer")
+			c.Writer.Header().Set("X-Powered-By", "Net")
 			c.Next()
 		}
 	}
