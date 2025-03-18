@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -66,6 +70,56 @@ func main() {
 					//给一个长久的时间sleep
 					time.Sleep(time.Duration(300) * time.Second)
 				}
+			})
+
+			// 添加新路由 /gettext 用于加载 demo.txt 文件
+			r.GET("/gettext", func(c *gin.Context) {
+				// 获取当前工作目录
+				currentDir, err := os.Getwd()
+				if err != nil {
+					c.JSON(500, gin.H{"error": "无法获取当前工作目录", "details": err.Error()})
+					return
+				}
+
+				// 构建 demo.txt 的完整路径
+				filePath := filepath.Join(currentDir, "demo.txt")
+
+				// 检查文件是否存在
+				_, err = os.Stat(filePath)
+				if os.IsNotExist(err) {
+					c.JSON(404, gin.H{"error": "demo.txt 文件不存在"})
+					return
+				}
+
+				// 读取文件内容
+				content, err := ioutil.ReadFile(filePath)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "无法读取文件", "details": err.Error()})
+					return
+				}
+
+				// 使用gzip压缩内容
+				var compressedData bytes.Buffer
+				gzipWriter := gzip.NewWriter(&compressedData)
+				_, err = gzipWriter.Write(content)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "压缩内容失败", "details": err.Error()})
+					return
+				}
+				err = gzipWriter.Close()
+				if err != nil {
+					c.JSON(500, gin.H{"error": "关闭gzip写入器失败", "details": err.Error()})
+					return
+				}
+
+				// 设置响应头，表明内容已被gzip压缩
+				c.Writer.Header().Set("Content-Encoding", "gzip")
+
+				// 直接返回压缩后的内容
+				c.Data(200, "text/plain", compressedData.Bytes())
+
+				// 打印响应信息
+				fmt.Printf("已读取文件 %s 并返回gzip压缩内容\n", filePath)
 			})
 
 			if port != "longtime" {
