@@ -122,6 +122,48 @@ func main() {
 				fmt.Printf("已读取文件 %s 并返回gzip压缩内容\n", filePath)
 			})
 
+			// 添加新路由 /gettextgbk 用于加载 demo.txt 文件并返回GBK编码
+			r.GET("/gettextgbk", func(c *gin.Context) {
+				// 获取当前工作目录
+				currentDir, err := os.Getwd()
+				if err != nil {
+					c.JSON(500, gin.H{"error": "无法获取当前工作目录", "details": err.Error()})
+					return
+				}
+
+				// 构建 demo.txt 的完整路径
+				filePath := filepath.Join(currentDir, "demogbk.txt")
+
+				// 检查文件是否存在
+				_, err = os.Stat(filePath)
+				if os.IsNotExist(err) {
+					c.JSON(404, gin.H{"error": "demogbk.txt 文件不存在"})
+					return
+				}
+
+				// 读取文件内容
+				content, err := ioutil.ReadFile(filePath)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "无法读取文件", "details": err.Error()})
+					return
+				}
+
+				// 删除 gzip 压缩相关代码
+				// 直接设置响应头
+				c.Writer.Header().Set("Content-Type", "text/html; charset=GBK")
+				c.Writer.Header().Set("Pragma", "no-cache")
+				c.Writer.Header().Set("Cache-Control", "no-store")
+				c.Writer.Header().Set("Set-Cookie", "JSESSIONID=11111;Path=/")
+				c.Writer.Header().Set("Expires", "Thu, 01 Jan 1970 00:00:00 GMT")
+				c.Writer.Header().Set("Transfer-Encoding", "chunked")
+
+				// 直接返回原始内容
+				c.Data(200, "", content)
+
+				// 更新日志信息
+				fmt.Printf("已读取文件 %s 并返回GBK编码内容\n", filePath)
+			})
+
 			if port != "longtime" {
 				// 启动服务器
 				err := r.Run(":" + port)
