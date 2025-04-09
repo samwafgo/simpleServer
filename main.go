@@ -5,9 +5,12 @@ import (
 	"compress/gzip"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -16,10 +19,26 @@ func main() {
 	// 从命令行参数获取端口号
 	if len(os.Args) < 2 {
 		fmt.Println("请提供一个或多个端口号")
+		fmt.Println("用法: ./simpleServer [端口号...] [协议类型(可选,http/ws,默认http)]")
 		return
 	}
 
-	ports := os.Args[1:]
+	// 检查最后一个参数是否为协议类型
+	args := os.Args[1:]
+	protocolType := "http" // 默认为HTTP协议
+
+	if len(args) > 0 && (args[len(args)-1] == "http" || args[len(args)-1] == "ws") {
+		protocolType = args[len(args)-1]
+		args = args[:len(args)-1] // 移除协议类型参数
+	}
+
+	// 如果没有端口号，则显示错误
+	if len(args) == 0 {
+		fmt.Println("请提供至少一个端口号")
+		return
+	}
+
+	ports := args
 
 	var wg sync.WaitGroup
 	longTime := false
@@ -31,6 +50,15 @@ func main() {
 			c.Writer.Header().Set("X-Powered-By", "Net")
 			c.Next()
 		}
+	}
+
+	// WebSocket升级器
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true // 允许所有来源
+		},
 	}
 
 	// 为每个端口创建一个服务
@@ -45,6 +73,7 @@ func main() {
 			r := gin.Default()
 			// 应用中间件
 			r.Use(setServerHeader())
+
 			// 定义路由，返回端口号并打印请求和响应信息
 			r.GET("/", func(c *gin.Context) {
 				requestInfo := gin.H{
@@ -71,6 +100,61 @@ func main() {
 					time.Sleep(time.Duration(300) * time.Second)
 				}
 			})
+
+			// 如果是WebSocket协议，添加WebSocket处理路由
+			if protocolType == "ws" {
+				r.GET("/ws", func(c *gin.Context) {
+					conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+					if err != nil {
+						fmt.Printf("WebSocket升级失败: %v\n", err)
+						return
+					}
+					defer conn.Close()
+
+					fmt.Printf("WebSocket客户端已连接: %s\n", c.Request.RemoteAddr)
+
+					// 创建一个定时器，每秒发送一次消息
+					ticker := time.NewTicker(1 * time.Second)
+					defer ticker.Stop()
+
+					// 创建一个通道用于通知发送 goroutine 停止
+					done := make(chan struct{})
+					defer close(done)
+
+					// 在另一个goroutine中处理发送消息
+					go func() {
+						for {
+							select {
+							case <-ticker.C:
+								err := conn.WriteMessage(websocket.TextMessage, []byte("samwaf hello"))
+								if err != nil {
+									fmt.Printf("发送消息失败: %v\n", err)
+									return
+								}
+								fmt.Printf("已向 %s 发送消息: samwaf hello\n", c.Request.RemoteAddr)
+							case <-done:
+								// 收到停止信号，结束 goroutine
+								fmt.Printf("客户端 %s 断开连接，停止发送消息\n", c.Request.RemoteAddr)
+								return
+							}
+						}
+					}()
+
+					// 保持连接并读取消息
+					for {
+						_, message, err := conn.ReadMessage()
+						if err != nil {
+							if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+								fmt.Printf("读取消息错误: %v\n", err)
+							} else {
+								fmt.Printf("客户端 %s 断开连接\n", c.Request.RemoteAddr)
+							}
+							break
+						}
+						fmt.Printf("收到消息: %s\n", message)
+					}
+				})
+			}
 
 			// 添加新路由 /gettext 用于加载 demo.txt 文件
 			r.GET("/gettext", func(c *gin.Context) {
@@ -132,12 +216,12 @@ func main() {
 				}
 
 				// 构建 demo.txt 的完整路径
-				filePath := filepath.Join(currentDir, "demogbk.txt")
+				filePath := filepath.Join(currentDir, "demo.txt")
 
 				// 检查文件是否存在
 				_, err = os.Stat(filePath)
 				if os.IsNotExist(err) {
-					c.JSON(404, gin.H{"error": "demogbk.txt 文件不存在"})
+					c.JSON(404, gin.H{"error": "demo.txt 文件不存在"})
 					return
 				}
 
@@ -148,24 +232,24 @@ func main() {
 					return
 				}
 
-				// 删除 gzip 压缩相关代码
-				// 直接设置响应头
+				// 设置响应头
 				c.Writer.Header().Set("Content-Type", "text/html; charset=GBK")
 				c.Writer.Header().Set("Pragma", "no-cache")
 				c.Writer.Header().Set("Cache-Control", "no-store")
-				c.Writer.Header().Set("Set-Cookie", "JSESSIONID=11111;Path=/")
+				c.Writer.Header().Set("Set-Cookie", "JSESSIONID=1cpudox7br7hm16jsfo61gwmew;Path=/")
 				c.Writer.Header().Set("Expires", "Thu, 01 Jan 1970 00:00:00 GMT")
 				c.Writer.Header().Set("Transfer-Encoding", "chunked")
 
 				// 直接返回原始内容
 				c.Data(200, "", content)
 
-				// 更新日志信息
+				// 打印响应信息
 				fmt.Printf("已读取文件 %s 并返回GBK编码内容\n", filePath)
 			})
 
 			if port != "longtime" {
 				// 启动服务器
+				fmt.Printf("在端口 %s 上启动 %s 服务器\n", port, strings.ToUpper(protocolType))
 				err := r.Run(":" + port)
 				if err != nil {
 					fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
