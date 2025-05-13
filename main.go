@@ -156,6 +156,43 @@ func main() {
 				})
 			}
 
+			// 添加 Server-Sent Events (event-stream) 路由
+			r.GET("/events", func(c *gin.Context) {
+				// 设置响应头
+				c.Writer.Header().Set("Content-Type", "text/event-stream")
+				c.Writer.Header().Set("Cache-Control", "no-cache")
+				c.Writer.Header().Set("Connection", "keep-alive")
+				c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+
+				// 清空缓冲区
+				c.Writer.Flush()
+
+				// 创建一个通道，用于检测客户端是否断开连接
+				clientGone := c.Request.Context().Done()
+
+				// 创建一个定时器，每秒发送一次消息
+				ticker := time.NewTicker(1 * time.Second)
+				defer ticker.Stop()
+
+				fmt.Printf("SSE 客户端已连接: %s\n", c.Request.RemoteAddr)
+
+				// 循环发送事件
+				for {
+					select {
+					case <-ticker.C:
+						// 构建 SSE 消息格式
+						// 格式: data: message\n\n
+						fmt.Fprintf(c.Writer, "data: samwaf hello\n\n")
+						c.Writer.Flush()
+						fmt.Printf("已向 SSE 客户端 %s 发送消息: samwaf hello\n", c.Request.RemoteAddr)
+					case <-clientGone:
+						// 客户端断开连接
+						fmt.Printf("SSE 客户端 %s 断开连接\n", c.Request.RemoteAddr)
+						return
+					}
+				}
+			})
+
 			// 添加新路由 /gettext 用于加载 demo.txt 文件
 			r.GET("/gettext", func(c *gin.Context) {
 				// 获取当前工作目录
