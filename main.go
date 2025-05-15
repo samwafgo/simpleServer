@@ -79,6 +79,7 @@ func main() {
 				requestInfo := gin.H{
 					"method":  c.Request.Method,
 					"url":     c.Request.URL.String(),
+					"host":    c.Request.Host,
 					"headers": c.Request.Header,
 				}
 				responseData := gin.H{
