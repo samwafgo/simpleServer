@@ -101,6 +101,29 @@ func main() {
 				}
 			})
 
+			// 添加支持POST的接口
+			r.POST("/postdata", func(c *gin.Context) {
+				// 读取请求体
+				bodyBytes, err := ioutil.ReadAll(c.Request.Body)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "读取请求体失败", "details": err.Error()})
+					return
+				}
+
+				// 将请求体转换为字符串
+				bodyString := string(bodyBytes)
+
+				// 打印请求信息
+				fmt.Printf("收到POST请求: %s\n", c.Request.URL.String())
+				fmt.Printf("请求体内容: %s\n", bodyString)
+
+				// 返回请求体内容
+				c.String(200, bodyString)
+
+				// 打印响应信息
+				fmt.Printf("已将请求体内容返回给客户端\n")
+			})
+
 			// 如果是WebSocket协议，添加WebSocket处理路由
 			if protocolType == "ws" {
 				r.GET("/ws", func(c *gin.Context) {
