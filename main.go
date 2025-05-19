@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -306,6 +307,26 @@ func main() {
 
 				// 打印响应信息
 				fmt.Printf("已读取文件 %s 并返回GBK编码内容\n", filePath)
+			})
+			// 添加新路由 /getjsonnotcharset  不包含 charset=utf-8
+			r.GET("/getjsonnotcharset", func(c *gin.Context) {
+				// 设置响应头
+				c.Writer.Header().Set("Content-Type", "application/json")
+				// 创建响应数据
+				responseData := gin.H{
+					"content": "你好test123",
+				}
+				// 手动编码为JSON
+				jsonData, err := json.Marshal(responseData)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "JSON编码失败", "details": err.Error()})
+					return
+				}
+
+				// 直接返回JSON数据
+				c.Writer.WriteHeader(200)
+				c.Writer.Write(jsonData)
+
 			})
 
 			if port != "longtime" {
