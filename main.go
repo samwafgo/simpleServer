@@ -182,7 +182,7 @@ func main() {
 			}
 
 			// 添加 Server-Sent Events (event-stream) 路由
-			r.GET("/events", func(c *gin.Context) {
+			r.POST("/events", func(c *gin.Context) {
 				// 设置响应头
 				c.Writer.Header().Set("Content-Type", "text/event-stream")
 				c.Writer.Header().Set("Cache-Control", "no-cache")
@@ -207,9 +207,9 @@ func main() {
 					case <-ticker.C:
 						// 构建 SSE 消息格式
 						// 格式: data: message\n\n
-						fmt.Fprintf(c.Writer, "data: samwaf hello\n\n")
+						fmt.Fprintf(c.Writer, "data: samwaf hello event-stream\n\n")
 						c.Writer.Flush()
-						fmt.Printf("已向 SSE 客户端 %s 发送消息: samwaf hello\n", c.Request.RemoteAddr)
+						fmt.Printf("已向 SSE 客户端 %s 发送消息: samwaf hello event-stream\n", c.Request.RemoteAddr)
 					case <-clientGone:
 						// 客户端断开连接
 						fmt.Printf("SSE 客户端 %s 断开连接\n", c.Request.RemoteAddr)
