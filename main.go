@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/xuri/excelize/v2"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +87,7 @@ func main() {
 				}
 				responseData := gin.H{
 					"port": port,
+					"敏感词0": "小额贷款", //测试敏感词
 				}
 
 				// 打印请求信息
@@ -348,7 +351,72 @@ func main() {
 				c.Writer.Write(jsonData)
 
 			})
+			// 添加新路由 /xls 返回真正的 Excel 文件
+			r.GET("/xls", func(c *gin.Context) {
+				// 创建一个新的 Excel 文件
+				f := excelize.NewFile()
+				defer func() {
+					if err := f.Close(); err != nil {
+						fmt.Println(err)
+					}
+				}()
 
+				// 设置工作表名称
+				sheetName := "Sheet1"
+
+				// 设置标题行
+				f.SetCellValue(sheetName, "A1", "标题")
+				f.SetCellValue(sheetName, "B1", "功能")
+
+				// 设置内容行
+				f.SetCellValue(sheetName, "A2", "测试内容")
+				f.SetCellValue(sheetName, "B2", "测试功能")
+
+				// 设置标题行样式
+				style, err := f.NewStyle(&excelize.Style{
+					Font: &excelize.Font{
+						Bold: true,
+						Size: 12,
+					},
+					Fill: excelize.Fill{
+						Type:    "pattern",
+						Color:   []string{"#E0E0E0"},
+						Pattern: 1,
+					},
+				})
+				if err != nil {
+					c.JSON(500, gin.H{"error": "创建样式失败", "details": err.Error()})
+					return
+				}
+
+				// 应用样式到标题行
+				f.SetCellStyle(sheetName, "A1", "B1", style)
+
+				// 设置列宽
+				f.SetColWidth(sheetName, "A", "B", 15)
+
+				// 将 Excel 文件保存到内存缓冲区
+				buf, err := f.WriteToBuffer()
+				if err != nil {
+					c.JSON(500, gin.H{"error": "生成Excel文件失败", "details": err.Error()})
+					return
+				}
+
+				// 获取文件大小
+				fileSize := buf.Len()
+
+				// 设置响应头
+				c.Writer.Header().Set("Cache-Control", "no-cache, no-store, max-age=0, must-revalidate")
+				c.Writer.Header().Set("Content-Disposition", "attachment;filename=%E5%B7%A5%E4%BD%9C%E7%B0%BF1.xlsx")
+				c.Writer.Header().Set("Content-Length", strconv.Itoa(fileSize))
+				c.Writer.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+				// 返回 Excel 文件
+				c.Data(200, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buf.Bytes())
+
+				// 打印响应信息
+				fmt.Printf("已返回 Excel 文件下载，文件大小: %d 字节\n", fileSize)
+			})
 			if port != "longtime" {
 				// 启动服务器
 				fmt.Printf("在端口 %s 上启动 %s 服务器\n", port, strings.ToUpper(protocolType))
