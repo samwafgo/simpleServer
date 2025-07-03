@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/xuri/excelize/v2"
@@ -269,6 +270,56 @@ func main() {
 
 				// 打印响应信息
 				fmt.Printf("已读取文件 %s 并返回gzip压缩内容\n", filePath)
+			})
+
+			// 添加新路由 /gettextbr 用于加载 demo.txt 文件并使用 Brotli 压缩
+			r.GET("/gettextbr", func(c *gin.Context) {
+				// 获取当前工作目录
+				currentDir, err := os.Getwd()
+				if err != nil {
+					c.JSON(500, gin.H{"error": "无法获取当前工作目录", "details": err.Error()})
+					return
+				}
+
+				// 构建 demo.txt 的完整路径
+				filePath := filepath.Join(currentDir, "demo.txt")
+
+				// 检查文件是否存在
+				_, err = os.Stat(filePath)
+				if os.IsNotExist(err) {
+					c.JSON(404, gin.H{"error": "demo.txt 文件不存在"})
+					return
+				}
+
+				// 读取文件内容
+				content, err := ioutil.ReadFile(filePath)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "无法读取文件", "details": err.Error()})
+					return
+				}
+
+				// 使用 Brotli 压缩内容
+				var compressedData bytes.Buffer
+				brotliWriter := brotli.NewWriter(&compressedData)
+				_, err = brotliWriter.Write(content)
+				if err != nil {
+					c.JSON(500, gin.H{"error": "Brotli压缩内容失败", "details": err.Error()})
+					return
+				}
+				err = brotliWriter.Close()
+				if err != nil {
+					c.JSON(500, gin.H{"error": "关闭Brotli写入器失败", "details": err.Error()})
+					return
+				}
+
+				// 设置响应头，表明内容已被 Brotli 压缩
+				c.Writer.Header().Set("Content-Encoding", "br")
+				c.Writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+				// 直接返回压缩后的内容
+				c.Data(200, "text/plain", compressedData.Bytes())
+
+				// 打印响应信息
+				fmt.Printf("已读取文件 %s 并返回Brotli压缩内容\n", filePath)
 			})
 
 			// 添加新路由 /gettextgbk 用于加载 demo.txt 文件并返回GBK编码
