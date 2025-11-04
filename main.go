@@ -495,6 +495,19 @@ func startWebServer(port string, protocolType string, longTime bool) {
 		c.Writer.Write(jsonData)
 
 	})
+	// 新增：访问敏感信息接口（模拟数据）
+	r.GET("/sensitiveinfo", func(c *gin.Context) {
+		data := gin.H{
+			"姓名":  "张三",
+			"手机号": "13800138000",
+			"邮箱":  "zhangsan@example.com",
+			"地址":  "北京市朝阳区建国路88号",
+		}
+		// 可选：标注敏感级别，便于测试审计/拦截
+		c.Writer.Header().Set("X-Data-Classification", "sensitive")
+		c.JSON(200, data)
+		fmt.Printf("敏感信息访问: %+v\n", data)
+	})
 	// 添加新路由 /.well-known/acme-challenge/2NKiiETgQdPmmjlM88mH5uo6jM98PrgWwsDslaN8
 	r.GET("/.well-known/acme-challenge/2NKiiETgQdPmmjlM88mH5uo6jM98PrgWwsDslaN8", func(c *gin.Context) {
 		// 设置响应头
