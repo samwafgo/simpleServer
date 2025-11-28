@@ -5,10 +5,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/andybalholm/brotli"
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
-	"github.com/xuri/excelize/v2"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -18,6 +14,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/andybalholm/brotli"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/xuri/excelize/v2"
 )
 
 // 全局变量：定时器间隔时间
@@ -593,6 +594,90 @@ func startWebServer(port string, protocolType string, longTime bool) {
 
 		// 打印响应信息
 		fmt.Printf("已返回 Excel 文件下载，文件大小: %d 字节\n", fileSize)
+	})
+
+	// 添加错误状态码测试路由
+	// 500 内部服务器错误
+	r.GET("/error500", func(c *gin.Context) {
+		c.JSON(500, gin.H{
+			"error":   "内部服务器错误",
+			"message": "这是一个测试用的500错误",
+			"code":    500,
+		})
+		fmt.Printf("返回500错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 404 未找到
+	r.GET("/error404", func(c *gin.Context) {
+		c.JSON(404, gin.H{
+			"error":   "资源未找到",
+			"message": "这是一个测试用的404错误",
+			"code":    404,
+		})
+		fmt.Printf("返回404错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 400 错误请求
+	r.GET("/error400", func(c *gin.Context) {
+		c.JSON(400, gin.H{
+			"error":   "错误请求",
+			"message": "这是一个测试用的400错误",
+			"code":    400,
+		})
+		fmt.Printf("返回400错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 401 未授权
+	r.GET("/error401", func(c *gin.Context) {
+		c.Writer.Header().Set("WWW-Authenticate", "Basic realm=\"Test Realm\"")
+		c.JSON(401, gin.H{
+			"error":   "未授权",
+			"message": "这是一个测试用的401错误",
+			"code":    401,
+		})
+		fmt.Printf("返回401错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 403 禁止访问
+	r.GET("/error403", func(c *gin.Context) {
+		c.JSON(403, gin.H{
+			"error":   "禁止访问",
+			"message": "这是一个测试用的403错误",
+			"code":    403,
+		})
+		fmt.Printf("返回403错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 502 网关错误
+	r.GET("/error502", func(c *gin.Context) {
+		c.JSON(502, gin.H{
+			"error":   "网关错误",
+			"message": "这是一个测试用的502错误",
+			"code":    502,
+		})
+		fmt.Printf("返回502错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 503 服务不可用
+	r.GET("/error503", func(c *gin.Context) {
+		c.Writer.Header().Set("Retry-After", "60")
+		c.JSON(503, gin.H{
+			"error":   "服务不可用",
+			"message": "这是一个测试用的503错误",
+			"code":    503,
+		})
+		fmt.Printf("返回503错误给客户端: %s\n", c.Request.RemoteAddr)
+	})
+
+	// 429 请求过多
+	r.GET("/error429", func(c *gin.Context) {
+		c.Writer.Header().Set("Retry-After", "60")
+		c.JSON(429, gin.H{
+			"error":   "请求过多",
+			"message": "这是一个测试用的429错误",
+			"code":    429,
+		})
+		fmt.Printf("返回429错误给客户端: %s\n", c.Request.RemoteAddr)
 	})
 
 	if port != "longtime" {
