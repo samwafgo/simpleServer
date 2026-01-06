@@ -194,24 +194,45 @@ func startWebServer(port string, protocolType string, longTime bool) {
 
 	// 定义路由，返回端口号并打印请求和响应信息
 	r.GET("/", func(c *gin.Context) {
-		requestInfo := gin.H{
-			"method":  c.Request.Method,
-			"url":     c.Request.URL.String(),
-			"host":    c.Request.Host,
-			"headers": c.Request.Header,
+		bodyBytes, _ := ioutil.ReadAll(c.Request.Body)
+		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		fmt.Println("\n========== HTTP请求原始报文 ==========")
+		fmt.Printf("请求行: %s %s %s\n", c.Request.Method, c.Request.URL.RequestURI(), c.Request.Proto)
+		fmt.Println("\n请求头:")
+		for key, values := range c.Request.Header {
+			for _, value := range values {
+				fmt.Printf("  %s: %s\n", key, value)
+			}
 		}
+		if len(bodyBytes) > 0 {
+			fmt.Println("\n请求体:")
+			fmt.Printf("  %s\n", string(bodyBytes))
+		}
+		fmt.Println("\n========== HTTP请求详细信息 ==========")
+		fmt.Printf("方法: %s\n", c.Request.Method)
+		fmt.Printf("URL: %s\n", c.Request.URL.String())
+		fmt.Printf("协议: %s\n", c.Request.Proto)
+		fmt.Printf("主机: %s\n", c.Request.Host)
+		fmt.Printf("远程地址: %s\n", c.Request.RemoteAddr)
+		fmt.Printf("请求URI: %s\n", c.Request.URL.RequestURI())
+		fmt.Printf("路径: %s\n", c.Request.URL.Path)
+		fmt.Printf("查询参数: %s\n", c.Request.URL.RawQuery)
+		fmt.Printf("片段: %s\n", c.Request.URL.Fragment)
+		fmt.Printf("内容长度: %d\n", c.Request.ContentLength)
+		fmt.Printf("传输编码: %v\n", c.Request.TransferEncoding)
+		fmt.Printf("User-Agent: %s\n", c.Request.UserAgent())
+		fmt.Printf("Referer: %s\n", c.Request.Referer())
+		fmt.Printf("Cookies: %v\n", c.Request.Cookies())
+		fmt.Println("=====================================\n")
+
 		responseData := gin.H{
 			"port": port,
-			"敏感词0": "小额贷款", //测试敏感词
+			"敏感词0": "小额贷款",
 		}
 
-		// 打印请求信息
-		fmt.Printf("请求信息: %+v\n", requestInfo)
-
-		// 返回响应
 		c.JSON(200, responseData)
 
-		// 打印响应信息
 		fmt.Printf("响应信息: %+v\n", responseData)
 
 		if longTime {

@@ -1,8 +1,8 @@
 module simpleServer
 
-go 1.23.0
+go 1.24.0
 
-toolchain go1.23.10
+toolchain go1.24.7
 
 require (
 	github.com/andybalholm/brotli v1.2.0
