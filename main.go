@@ -209,23 +209,6 @@ func startWebServer(port string, protocolType string, longTime bool) {
 			fmt.Println("\n请求体:")
 			fmt.Printf("  %s\n", string(bodyBytes))
 		}
-		fmt.Println("\n========== HTTP请求详细信息 ==========")
-		fmt.Printf("方法: %s\n", c.Request.Method)
-		fmt.Printf("URL: %s\n", c.Request.URL.String())
-		fmt.Printf("协议: %s\n", c.Request.Proto)
-		fmt.Printf("主机: %s\n", c.Request.Host)
-		fmt.Printf("远程地址: %s\n", c.Request.RemoteAddr)
-		fmt.Printf("请求URI: %s\n", c.Request.URL.RequestURI())
-		fmt.Printf("路径: %s\n", c.Request.URL.Path)
-		fmt.Printf("查询参数: %s\n", c.Request.URL.RawQuery)
-		fmt.Printf("片段: %s\n", c.Request.URL.Fragment)
-		fmt.Printf("内容长度: %d\n", c.Request.ContentLength)
-		fmt.Printf("传输编码: %v\n", c.Request.TransferEncoding)
-		fmt.Printf("User-Agent: %s\n", c.Request.UserAgent())
-		fmt.Printf("Referer: %s\n", c.Request.Referer())
-		fmt.Printf("Cookies: %v\n", c.Request.Cookies())
-		fmt.Println("=====================================\n")
-
 		responseData := gin.H{
 			"port": port,
 			"敏感词0": "小额贷款",
