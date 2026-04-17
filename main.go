@@ -167,6 +167,82 @@ func startUDPServer(port string) {
 	}
 }
 
+// ==================== 动态路由配置 ====================
+
+// RouteConfig 单条路由配置项
+type RouteConfig struct {
+	Name        string                 `json:"name"`
+	Method      string                 `json:"method"`
+	Path        string                 `json:"path"`
+	Status      int                    `json:"status"`
+	Headers     map[string]string      `json:"headers"`
+	Response    map[string]interface{} `json:"response"`
+	RawResponse string                 `json:"rawResponse"`
+}
+
+// loadRoutes 从 routes.json 加载动态路由配置
+func loadRoutes(configPath string) ([]RouteConfig, error) {
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+	var routes []RouteConfig
+	if err := json.Unmarshal(data, &routes); err != nil {
+		return nil, err
+	}
+	return routes, nil
+}
+
+// registerDynamicRoutes 将配置中的路由注册到 gin Engine
+func registerDynamicRoutes(r *gin.Engine, routes []RouteConfig) {
+	for _, route := range routes {
+		route := route // capture loop variable
+		handler := func(c *gin.Context) {
+			// 写入自定义 Header
+			for k, v := range route.Headers {
+				c.Writer.Header().Set(k, v)
+			}
+
+			status := route.Status
+			if status == 0 {
+				status = 200
+			}
+
+			// 如果有 rawResponse，返回纯文本
+			if route.RawResponse != "" {
+				c.String(status, route.RawResponse)
+				fmt.Printf("[动态路由] %s %s => %d (text)\n", route.Method, route.Path, status)
+				return
+			}
+
+			// 否则返回 JSON
+			c.JSON(status, route.Response)
+			fmt.Printf("[动态路由] %s %s => %d\n", route.Method, route.Path, status)
+		}
+
+		method := strings.ToUpper(route.Method)
+		switch method {
+		case "GET":
+			r.GET(route.Path, handler)
+		case "POST":
+			r.POST(route.Path, handler)
+		case "PUT":
+			r.PUT(route.Path, handler)
+		case "PATCH":
+			r.PATCH(route.Path, handler)
+		case "DELETE":
+			r.DELETE(route.Path, handler)
+		case "HEAD":
+			r.HEAD(route.Path, handler)
+		case "OPTIONS":
+			r.OPTIONS(route.Path, handler)
+		default:
+			fmt.Printf("[动态路由] 不支持的方法: %s，跳过路由: %s\n", method, route.Path)
+		}
+		fmt.Printf("[动态路由] 已注册: %-8s %s  (%s)\n", method, route.Path, route.Name)
+	}
+}
+
 // Web服务器函数
 func startWebServer(port string, protocolType string, longTime bool) {
 	// 创建设置Server头的中间件
@@ -683,6 +759,16 @@ func startWebServer(port string, protocolType string, longTime bool) {
 		})
 		fmt.Printf("返回429错误给客户端: %s\n", c.Request.RemoteAddr)
 	})
+
+	// 加载 routes.json 动态路由（文件不存在则跳过，不影响内置路由）
+	currentDir, _ := os.Getwd()
+	routesFile := filepath.Join(currentDir, "routes.json")
+	if dynamicRoutes, err := loadRoutes(routesFile); err == nil {
+		fmt.Printf("已加载 routes.json，共 %d 条动态路由\n", len(dynamicRoutes))
+		registerDynamicRoutes(r, dynamicRoutes)
+	} else {
+		fmt.Printf("未加载 routes.json（%v），仅使用内置路由\n", err)
+	}
 
 	if port != "longtime" {
 		// 启动服务器
