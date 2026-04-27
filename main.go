@@ -770,13 +770,15 @@ func startWebServer(port string, protocolType string, longTime bool) {
 		fmt.Printf("未加载 routes.json（%v），仅使用内置路由\n", err)
 	}
 
-	if port != "longtime" {
-		// 启动服务器
+	// 启动服务器
+	if longTime {
+		fmt.Printf("在端口 %s 上启动 %s 服务器  [longtime模式: GET / 将延迟300秒响应]\n", port, strings.ToUpper(protocolType))
+	} else {
 		fmt.Printf("在端口 %s 上启动 %s 服务器\n", port, strings.ToUpper(protocolType))
-		err := r.Run(":" + port)
-		if err != nil {
-			fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
-		}
+	}
+	err := r.Run(":" + port)
+	if err != nil {
+		fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
 	}
 }
 
@@ -784,7 +786,7 @@ func main() {
 	// 从命令行参数获取端口号
 	if len(os.Args) < 2 {
 		fmt.Println("请提供一个或多个端口号")
-		fmt.Println("用法: ./simpleServer [端口号...] [协议类型(可选,http/ws/tcp/udp,默认http)]")
+		fmt.Println("用法: ./simpleServer [端口号...] [longtime(可选)] [协议类型(可选,http/ws/tcp/udp,默认http)]")
 		return
 	}
 
@@ -797,24 +799,40 @@ func main() {
 		args = args[:len(args)-1] // 移除协议类型参数
 	}
 
+	// 提前扫描参数，检测 longtime 标志并剔除出端口列表（避免竞态条件）
+	longTime := false
+	var ports []string
+	for _, arg := range args {
+		if arg == "longtime" {
+			longTime = true
+		} else {
+			ports = append(ports, arg)
+		}
+	}
+
 	// 如果没有端口号，则显示错误
-	if len(args) == 0 {
+	if len(ports) == 0 {
 		fmt.Println("请提供至少一个端口号")
 		return
 	}
 
-	ports := args
+	// 打印启动配置摘要
+	fmt.Println("========== 服务器启动配置 ==========")
+	fmt.Printf("  协议类型  : %s\n", strings.ToUpper(protocolType))
+	fmt.Printf("  监听端口  : %s\n", strings.Join(ports, ", "))
+	if longTime {
+		fmt.Println("  longtime  : ✔ 已启用（GET / 请求将延迟 300 秒响应）")
+	} else {
+		fmt.Println("  longtime  : ✘ 未启用（正常响应）")
+	}
+	fmt.Println("====================================")
 
 	var wg sync.WaitGroup
-	longTime := false
 
 	// 为每个端口创建一个服务
 	for _, port := range ports {
 		wg.Add(1)
 		go func(port string) {
-			if port == "longtime" {
-				longTime = true
-			}
 			defer wg.Done()
 
 			// 根据协议类型启动不同的服务器
