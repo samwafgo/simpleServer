@@ -243,6 +243,27 @@ func registerDynamicRoutes(r *gin.Engine, routes []RouteConfig) {
 	}
 }
 
+func requestLoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		bodyBytes, _ := ioutil.ReadAll(c.Request.Body)
+		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		fmt.Printf("\n▶ %s %s  %s  [%s]\n", c.Request.Method, c.Request.URL.RequestURI(), c.Request.Proto, c.ClientIP())
+		for key, values := range c.Request.Header {
+			for _, value := range values {
+				fmt.Printf("  %-24s: %s\n", key, value)
+			}
+		}
+		if len(bodyBytes) > 0 {
+			fmt.Printf("  Body: %s\n", strings.TrimSpace(string(bodyBytes)))
+		}
+
+		c.Next()
+
+		fmt.Printf("◀ %d\n", c.Writer.Status())
+	}
+}
+
 // Web服务器函数
 func startWebServer(port string, protocolType string, longTime bool) {
 	// 创建设置Server头的中间件
@@ -266,62 +287,29 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	// 创建 Gin 路由
 	r := gin.Default()
 	// 应用中间件
-	r.Use(setServerHeader())
+	r.Use(setServerHeader(), requestLoggerMiddleware())
 
 	// 定义路由，返回端口号并打印请求和响应信息
 	r.GET("/", func(c *gin.Context) {
-		bodyBytes, _ := ioutil.ReadAll(c.Request.Body)
-		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-
-		fmt.Println("\n========== HTTP请求原始报文 ==========")
-		fmt.Printf("请求行: %s %s %s\n", c.Request.Method, c.Request.URL.RequestURI(), c.Request.Proto)
-		fmt.Println("\n请求头:")
-		for key, values := range c.Request.Header {
-			for _, value := range values {
-				fmt.Printf("  %s: %s\n", key, value)
-			}
-		}
-		if len(bodyBytes) > 0 {
-			fmt.Println("\n请求体:")
-			fmt.Printf("  %s\n", string(bodyBytes))
-		}
 		responseData := gin.H{
 			"port": port,
 			"敏感词0": "小额贷款",
 		}
-
 		c.JSON(200, responseData)
-
-		fmt.Printf("响应信息: %+v\n", responseData)
-
 		if longTime {
 			fmt.Printf("准备休眠: 300s \n")
-			//给一个长久的时间sleep
 			time.Sleep(time.Duration(300) * time.Second)
 		}
 	})
 
 	// 添加支持POST的接口
 	r.POST("/postdata", func(c *gin.Context) {
-		// 读取请求体
 		bodyBytes, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "读取请求体失败", "details": err.Error()})
 			return
 		}
-
-		// 将请求体转换为字符串
-		bodyString := string(bodyBytes)
-
-		// 打印请求信息
-		fmt.Printf("收到POST请求: %s\n", c.Request.URL.String())
-		fmt.Printf("请求体内容: %s\n", bodyString)
-
-		// 返回请求体内容
-		c.String(200, bodyString)
-
-		// 打印响应信息
-		fmt.Printf("已将请求体内容返回给客户端\n")
+		c.String(200, string(bodyBytes))
 	})
 
 	// 如果是WebSocket协议，添加WebSocket处理路由
@@ -416,8 +404,8 @@ func startWebServer(port string, protocolType string, longTime bool) {
 		}
 	})
 
-	// 添加新路由 /gettext 用于加载 demo.txt 文件
-	r.GET("/gettext", func(c *gin.Context) {
+	// 添加新路由 /gettextgzip 用于加载 demo.txt 文件
+	r.GET("/gettextgzip", func(c *gin.Context) {
 		// 获取当前工作目录
 		currentDir, err := os.Getwd()
 		if err != nil {
@@ -461,6 +449,39 @@ func startWebServer(port string, protocolType string, longTime bool) {
 
 		// 直接返回压缩后的内容
 		c.Data(200, "text/plain", compressedData.Bytes())
+
+		// 打印响应信息
+		fmt.Printf("已读取文件 %s 并返回gzip压缩内容\n", filePath)
+	})
+
+	// 添加新路由 /gettext 用于加载 demo.txt 文件
+	r.GET("/gettext", func(c *gin.Context) {
+		// 获取当前工作目录
+		currentDir, err := os.Getwd()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "无法获取当前工作目录", "details": err.Error()})
+			return
+		}
+
+		// 构建 demo.txt 的完整路径
+		filePath := filepath.Join(currentDir, "demo.txt")
+
+		// 检查文件是否存在
+		_, err = os.Stat(filePath)
+		if os.IsNotExist(err) {
+			c.JSON(404, gin.H{"error": "demo.txt 文件不存在"})
+			return
+		}
+
+		// 读取文件内容
+		content, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			c.JSON(500, gin.H{"error": "无法读取文件", "details": err.Error()})
+			return
+		}
+
+		// 直接返回压缩后的内容
+		c.Data(200, "text/plain", content)
 
 		// 打印响应信息
 		fmt.Printf("已读取文件 %s 并返回gzip压缩内容\n", filePath)
@@ -679,85 +700,31 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	// 添加错误状态码测试路由
 	// 500 内部服务器错误
 	r.GET("/error500", func(c *gin.Context) {
-		c.JSON(500, gin.H{
-			"error":   "内部服务器错误",
-			"message": "这是一个测试用的500错误",
-			"code":    500,
-		})
-		fmt.Printf("返回500错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(500, gin.H{"error": "内部服务器错误", "message": "这是一个测试用的500错误", "code": 500})
 	})
-
-	// 404 未找到
 	r.GET("/error404", func(c *gin.Context) {
-		c.JSON(404, gin.H{
-			"error":   "资源未找到",
-			"message": "这是一个测试用的404错误",
-			"code":    404,
-		})
-		fmt.Printf("返回404错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(404, gin.H{"error": "资源未找到", "message": "这是一个测试用的404错误", "code": 404})
 	})
-
-	// 400 错误请求
 	r.GET("/error400", func(c *gin.Context) {
-		c.JSON(400, gin.H{
-			"error":   "错误请求",
-			"message": "这是一个测试用的400错误",
-			"code":    400,
-		})
-		fmt.Printf("返回400错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(400, gin.H{"error": "错误请求", "message": "这是一个测试用的400错误", "code": 400})
 	})
-
-	// 401 未授权
 	r.GET("/error401", func(c *gin.Context) {
 		c.Writer.Header().Set("WWW-Authenticate", "Basic realm=\"Test Realm\"")
-		c.JSON(401, gin.H{
-			"error":   "未授权",
-			"message": "这是一个测试用的401错误",
-			"code":    401,
-		})
-		fmt.Printf("返回401错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(401, gin.H{"error": "未授权", "message": "这是一个测试用的401错误", "code": 401})
 	})
-
-	// 403 禁止访问
 	r.GET("/error403", func(c *gin.Context) {
-		c.JSON(403, gin.H{
-			"error":   "禁止访问",
-			"message": "这是一个测试用的403错误",
-			"code":    403,
-		})
-		fmt.Printf("返回403错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(403, gin.H{"error": "禁止访问", "message": "这是一个测试用的403错误", "code": 403})
 	})
-
-	// 502 网关错误
 	r.GET("/error502", func(c *gin.Context) {
-		c.JSON(502, gin.H{
-			"error":   "网关错误",
-			"message": "这是一个测试用的502错误",
-			"code":    502,
-		})
-		fmt.Printf("返回502错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(502, gin.H{"error": "网关错误", "message": "这是一个测试用的502错误", "code": 502})
 	})
-
-	// 503 服务不可用
 	r.GET("/error503", func(c *gin.Context) {
 		c.Writer.Header().Set("Retry-After", "60")
-		c.JSON(503, gin.H{
-			"error":   "服务不可用",
-			"message": "这是一个测试用的503错误",
-			"code":    503,
-		})
-		fmt.Printf("返回503错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(503, gin.H{"error": "服务不可用", "message": "这是一个测试用的503错误", "code": 503})
 	})
-
-	// 429 请求过多
 	r.GET("/error429", func(c *gin.Context) {
 		c.Writer.Header().Set("Retry-After", "60")
-		c.JSON(429, gin.H{
-			"error":   "请求过多",
-			"message": "这是一个测试用的429错误",
-			"code":    429,
-		})
-		fmt.Printf("返回429错误给客户端: %s\n", c.Request.RemoteAddr)
+		c.JSON(429, gin.H{"error": "请求过多", "message": "这是一个测试用的429错误", "code": 429})
 	})
 
 	// 加载 routes.json 动态路由（文件不存在则跳过，不影响内置路由）
