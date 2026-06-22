@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -266,11 +267,19 @@ func requestLoggerMiddleware() gin.HandlerFunc {
 
 // Web服务器函数
 func startWebServer(port string, protocolType string, longTime bool) {
-	// 创建设置Server头的中间件
+	// 创建设置Server头 + 全放行 CORS 的中间件
 	setServerHeader := func() gin.HandlerFunc {
 		return func(c *gin.Context) {
 			c.Writer.Header().Set("Server", "SamWaf TestServer")
 			c.Writer.Header().Set("X-Powered-By", "Net")
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(204)
+				return
+			}
 			c.Next()
 		}
 	}
@@ -289,17 +298,108 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	// 应用中间件
 	r.Use(setServerHeader(), requestLoggerMiddleware())
 
-	// 定义路由，返回端口号并打印请求和响应信息
+	// 路由描述表
+	routeDesc := map[string]string{
+		"GET /":                  "API 文档首页，列出所有路由",
+		"POST /postdata":         "回显请求 Body 原文",
+		"GET /ws":                "WebSocket 连接，每秒推送 'samwaf hello'",
+		"POST /events":           "Server-Sent Events，每秒推送 'samwaf hello event-stream'",
+		"GET /gettextgzip":       "返回 demo.txt（gzip 压缩）",
+		"GET /gettext":           "返回 demo.txt（纯文本）",
+		"GET /gettextbr":         "返回 demo.txt（Brotli 压缩）",
+		"GET /gettextgbk":        "返回 demo.txt（GBK 编码，含 Set-Cookie/Transfer-Encoding 头）",
+		"GET /getjsonnotcharset": "返回 JSON，Content-Type 不含 charset",
+		"GET /sensitiveinfo":     "返回模拟敏感信息（姓名/手机/邮箱/地址）",
+		"GET /sleep":             "延迟 seconds 秒后返回随机数据（?seconds=3，最大300）",
+		"GET /xls":               "下载 Excel 文件（.xlsx）",
+		"GET /error400":          "返回 400 Bad Request",
+		"GET /error401":          "返回 401 Unauthorized（含 WWW-Authenticate 头）",
+		"GET /error403":          "返回 403 Forbidden",
+		"GET /error404":          "返回 404 Not Found",
+		"GET /error429":          "返回 429 Too Many Requests（含 Retry-After 头）",
+		"GET /error500":          "返回 500 Internal Server Error",
+		"GET /error502":          "返回 502 Bad Gateway",
+		"GET /error503":          "返回 503 Service Unavailable（含 Retry-After 头）",
+		"GET /.well-known/acme-challenge/2NKiiETgQdPmmjlM88mH5uo6jM98PrgWwsDslaN8": "ACME 证书验证",
+	}
+
+	methodColor := map[string]string{
+		"GET":     "#61affe",
+		"POST":    "#49cc90",
+		"PUT":     "#fca130",
+		"PATCH":   "#50e3c2",
+		"DELETE":  "#f93e3e",
+		"HEAD":    "#9012fe",
+		"OPTIONS": "#0d5aa7",
+	}
+
+	// 定义路由，展示所有已注册路由（API 文档）
 	r.GET("/", func(c *gin.Context) {
-		responseData := gin.H{
-			"port": port,
-			"敏感词0": "小额贷款",
+		rows := ""
+		for _, info := range r.Routes() {
+			key := info.Method + " " + info.Path
+			desc := routeDesc[key]
+			if desc == "" {
+				desc = "—"
+			}
+			color := methodColor[info.Method]
+			if color == "" {
+				color = "#888"
+			}
+			example := fmt.Sprintf("curl -X %s http://%s%s", info.Method, c.Request.Host, info.Path)
+			if info.Method == "GET" {
+				example = fmt.Sprintf(`<a href="%s" target="_blank">%s</a>`, info.Path, info.Path)
+			}
+			rows += fmt.Sprintf(
+				`<tr>
+				  <td><span class="badge" style="background:%s">%s</span></td>
+				  <td><code>%s</code></td>
+				  <td>%s</td>
+				  <td class="ex">%s</td>
+				</tr>`, color, info.Method, info.Path, desc, example)
 		}
-		c.JSON(200, responseData)
-		if longTime {
-			fmt.Printf("准备休眠: 300s \n")
-			time.Sleep(time.Duration(300) * time.Second)
-		}
+
+		html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>API Routes — :%s</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:monospace;background:#1e1e1e;color:#d4d4d4;margin:0;padding:24px}
+  h2{color:#569cd6;border-bottom:1px solid #444;padding-bottom:8px;margin-top:0}
+  p{color:#888;margin:4px 0 16px}
+  table{border-collapse:collapse;width:100%%;font-size:13px}
+  th{background:#2d2d2d;color:#9cdcfe;text-align:left;padding:8px 12px;white-space:nowrap}
+  td{padding:7px 12px;border-bottom:1px solid #2a2a2a;vertical-align:top}
+  tr:hover td{background:#252526}
+  .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-weight:bold;color:#fff;font-size:11px;min-width:60px;text-align:center}
+  code{color:#ce9178}
+  .ex{color:#6a9955;font-size:12px}
+  .ex a{color:#4ec9b0;text-decoration:none}
+  .ex a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<h2>SimpleServer — Port %s</h2>
+<p>共 %%d 条路由 &nbsp;|&nbsp; 动态路由来自 routes.json（若存在）</p>
+<table>
+<tr>
+  <th style="width:90px">Method</th>
+  <th style="width:360px">Path</th>
+  <th>说明</th>
+  <th>示例 / 快捷访问</th>
+</tr>
+%s
+</table>
+</body>
+</html>`, port, port, rows)
+
+		total := len(r.Routes())
+		html = fmt.Sprintf(html, total)
+
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(200, html)
 	})
 
 	// 添加支持POST的接口
@@ -610,6 +710,33 @@ func startWebServer(port string, protocolType string, longTime bool) {
 		c.JSON(200, data)
 		fmt.Printf("敏感信息访问: %+v\n", data)
 	})
+	// 新增：延迟接口 /sleep?seconds=N  延迟 N 秒后返回随机数据
+	r.GET("/sleep", func(c *gin.Context) {
+		// 读取 seconds 参数，默认 1 秒，非法值回退为 1
+		secondsStr := c.DefaultQuery("seconds", "1")
+		seconds, err := strconv.Atoi(secondsStr)
+		if err != nil || seconds < 0 {
+			seconds = 1
+		}
+		// 限制最大延迟，避免长时间占用连接
+		if seconds > 300 {
+			seconds = 300
+		}
+
+		fmt.Printf("/sleep 收到请求，将延迟 %d 秒...\n", seconds)
+		time.Sleep(time.Duration(seconds) * time.Second)
+
+		// 生成随机数据
+		responseData := gin.H{
+			"sleepSeconds": seconds,
+			"randomInt":    rand.Intn(1000000),
+			"randomFloat":  rand.Float64(),
+			"randomStr":    randomString(16),
+			"timestamp":    time.Now().Format("2006-01-02 15:04:05"),
+		}
+		c.JSON(200, responseData)
+		fmt.Printf("/sleep 已延迟 %d 秒并返回随机数据: %+v\n", seconds, responseData)
+	})
 	// 添加新路由 /.well-known/acme-challenge/2NKiiETgQdPmmjlM88mH5uo6jM98PrgWwsDslaN8
 	r.GET("/.well-known/acme-challenge/2NKiiETgQdPmmjlM88mH5uo6jM98PrgWwsDslaN8", func(c *gin.Context) {
 		// 设置响应头
@@ -747,6 +874,17 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	if err != nil {
 		fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
 	}
+}
+
+// randomString 生成长度为 n 的随机字符串（字母+数字）
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func randomString(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
 }
 
 func main() {
