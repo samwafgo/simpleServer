@@ -22,6 +22,9 @@ jobs:
           - goos: linux
             goarch: amd64
             ext: ''
+          - goos: linux
+            goarch: arm64
+            ext: ''
     steps:
       - name: Checkout
         uses: actions/checkout@v4
