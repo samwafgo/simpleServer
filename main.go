@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
@@ -244,6 +245,24 @@ func registerDynamicRoutes(r *gin.Engine, routes []RouteConfig) {
 	}
 }
 
+// maxLoggedBodyBytes 控制台最多打印多少请求体。
+// 不能无脑全量打：AI 客户端(Codex 等)一条请求就带着完整对话+工具定义，动辄几十上百 KB，
+// 全量刷到 Windows 控制台会把 handler 拖住甚至看起来像死机
+// （控制台开了"快速编辑"又恰好被鼠标选中时，写操作会一直阻塞到按 Esc 为止）。
+const maxLoggedBodyBytes = 1024
+
+// truncateForLog 截断超长文本，附上原始长度。切点回退到 UTF-8 字符边界，避免输出半个汉字
+func truncateForLog(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + fmt.Sprintf("... [已截断，共 %d 字节]", len(s))
+}
+
 func requestLoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		bodyBytes, _ := ioutil.ReadAll(c.Request.Body)
@@ -252,11 +271,11 @@ func requestLoggerMiddleware() gin.HandlerFunc {
 		fmt.Printf("\n▶ %s %s  %s  [%s]\n", c.Request.Method, c.Request.URL.RequestURI(), c.Request.Proto, c.ClientIP())
 		for key, values := range c.Request.Header {
 			for _, value := range values {
-				fmt.Printf("  %-24s: %s\n", key, value)
+				fmt.Printf("  %-24s: %s\n", key, truncateForLog(value, 256))
 			}
 		}
 		if len(bodyBytes) > 0 {
-			fmt.Printf("  Body: %s\n", strings.TrimSpace(string(bodyBytes)))
+			fmt.Printf("  Body: %s\n", truncateForLog(strings.TrimSpace(string(bodyBytes)), maxLoggedBodyBytes))
 		}
 
 		c.Next()
@@ -300,26 +319,30 @@ func startWebServer(port string, protocolType string, longTime bool) {
 
 	// 路由描述表
 	routeDesc := map[string]string{
-		"GET /":                  "API 文档首页，列出所有路由",
-		"POST /postdata":         "回显请求 Body 原文",
-		"GET /ws":                "WebSocket 连接，每秒推送 'samwaf hello'",
-		"POST /events":           "Server-Sent Events，每秒推送 'samwaf hello event-stream'",
-		"GET /gettextgzip":       "返回 demo.txt（gzip 压缩）",
-		"GET /gettext":           "返回 demo.txt（纯文本）",
-		"GET /gettextbr":         "返回 demo.txt（Brotli 压缩）",
-		"GET /gettextgbk":        "返回 demo.txt（GBK 编码，含 Set-Cookie/Transfer-Encoding 头）",
-		"GET /getjsonnotcharset": "返回 JSON，Content-Type 不含 charset",
-		"GET /sensitiveinfo":     "返回模拟敏感信息（姓名/手机/邮箱/地址）",
-		"GET /sleep":             "延迟 seconds 秒后返回随机数据（?seconds=3，最大300）",
-		"GET /xls":               "下载 Excel 文件（.xlsx）",
-		"GET /error400":          "返回 400 Bad Request",
-		"GET /error401":          "返回 401 Unauthorized（含 WWW-Authenticate 头）",
-		"GET /error403":          "返回 403 Forbidden",
-		"GET /error404":          "返回 404 Not Found",
-		"GET /error429":          "返回 429 Too Many Requests（含 Retry-After 头）",
-		"GET /error500":          "返回 500 Internal Server Error",
-		"GET /error502":          "返回 502 Bad Gateway",
-		"GET /error503":          "返回 503 Service Unavailable（含 Retry-After 头）",
+		"GET /":                     "API 文档首页，列出所有路由",
+		"POST /postdata":            "回显请求 Body 原文",
+		"GET /ws":                   "WebSocket 连接，每秒推送 'samwaf hello'",
+		"POST /events":              "Server-Sent Events，每秒推送 'samwaf hello event-stream'",
+		"POST /v1/responses":        "OpenAI Responses API（Codex 用这个），SSE 流式；复现 issue #954（?size=正文字节数&delta=小事件条数&gap=间隔ms）",
+		"GET /v1/responses":         "同 POST /v1/responses，方便 curl -N 直接测",
+		"POST /v1/chat/completions": "OpenAI Chat Completions，SSE 流式（?bigfinal=1 把全文塞进最后一个 chunk 用于复现截断）",
+		"GET /v1/models":            "OpenAI 模型列表，供客户端探测",
+		"GET /gettextgzip":          "返回 demo.txt（gzip 压缩）",
+		"GET /gettext":              "返回 demo.txt（纯文本）",
+		"GET /gettextbr":            "返回 demo.txt（Brotli 压缩）",
+		"GET /gettextgbk":           "返回 demo.txt（GBK 编码，含 Set-Cookie/Transfer-Encoding 头）",
+		"GET /getjsonnotcharset":    "返回 JSON，Content-Type 不含 charset",
+		"GET /sensitiveinfo":        "返回模拟敏感信息（姓名/手机/邮箱/地址）",
+		"GET /sleep":                "延迟 seconds 秒后返回随机数据（?seconds=3，最大300）",
+		"GET /xls":                  "下载 Excel 文件（.xlsx）",
+		"GET /error400":             "返回 400 Bad Request",
+		"GET /error401":             "返回 401 Unauthorized（含 WWW-Authenticate 头）",
+		"GET /error403":             "返回 403 Forbidden",
+		"GET /error404":             "返回 404 Not Found",
+		"GET /error429":             "返回 429 Too Many Requests（含 Retry-After 头）",
+		"GET /error500":             "返回 500 Internal Server Error",
+		"GET /error502":             "返回 502 Bad Gateway",
+		"GET /error503":             "返回 503 Service Unavailable（含 Retry-After 头）",
 		"GET /.well-known/acme-challenge/2NKiiETgQdPmmjlM88mH5uo6jM98PrgWwsDslaN8": "ACME 证书验证",
 	}
 
@@ -503,6 +526,9 @@ func startWebServer(port string, protocolType string, longTime bool) {
 			}
 		}
 	})
+
+	// OpenAI 兼容接口（/v1/responses、/v1/chat/completions、/v1/models）见 sse_openai.go
+	registerOpenAIRoutes(r)
 
 	// 添加新路由 /gettextgzip 用于加载 demo.txt 文件
 	r.GET("/gettextgzip", func(c *gin.Context) {
