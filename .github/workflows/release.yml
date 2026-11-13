@@ -45,7 +45,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           OUT="simpleServer_${{ steps.ver.outputs.version }}_${{ matrix.goos }}_${{ matrix.goarch }}${{ matrix.ext }}"
-          go build -trimpath -ldflags "-s -w" -o "$OUT" main.go
+          go build -trimpath -ldflags "-s -w" -o "$OUT" .
           echo "ARTIFACT=$OUT" >> "$GITHUB_ENV"
 
       - name: Upload build artifact
