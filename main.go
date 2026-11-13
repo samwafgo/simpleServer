@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -263,24 +265,37 @@ func truncateForLog(s string, limit int) string {
 	return s[:cut] + fmt.Sprintf("... [已截断，共 %d 字节]", len(s))
 }
 
+var requestLogSequence atomic.Uint64
+
 func requestLoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		started := time.Now()
+		requestID := requestLogSequence.Add(1)
 		bodyBytes, _ := ioutil.ReadAll(c.Request.Body)
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		fmt.Printf("\n▶ %s %s  %s  [%s]\n", c.Request.Method, c.Request.URL.RequestURI(), c.Request.Proto, c.ClientIP())
-		for key, values := range c.Request.Header {
-			for _, value := range values {
-				fmt.Printf("  %-24s: %s\n", key, truncateForLog(value, 256))
+		var entry strings.Builder
+		fmt.Fprintf(&entry, "\n[Request #%d] %s  %s %s  %s  [%s]\n", requestID, started.Format("15:04:05.000"), c.Request.Method, c.Request.URL.RequestURI(), c.Request.Proto, c.ClientIP())
+		fmt.Fprintf(&entry, "  %-24s: %s\n", "Host", truncateForLog(c.Request.Host, 256))
+		keys := make([]string, 0, len(c.Request.Header))
+		for key := range c.Request.Header {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			for _, value := range c.Request.Header[key] {
+				fmt.Fprintf(&entry, "  %-24s: %s\n", key, truncateForLog(value, 256))
 			}
 		}
 		if len(bodyBytes) > 0 {
-			fmt.Printf("  Body: %s\n", truncateForLog(strings.TrimSpace(string(bodyBytes)), maxLoggedBodyBytes))
+			fmt.Fprintf(&entry, "  Body: %s\n", truncateForLog(strings.TrimSpace(string(bodyBytes)), maxLoggedBodyBytes))
 		}
+		// 整块写出，避免并发请求的头部交错。
+		fmt.Print(entry.String())
 
 		c.Next()
 
-		fmt.Printf("◀ %d\n", c.Writer.Status())
+		fmt.Printf("[Response #%d] %d  %s  Host=%s\n", requestID, c.Writer.Status(), time.Since(started).Round(time.Microsecond), truncateForLog(c.Request.Host, 256))
 	}
 }
 
@@ -313,9 +328,9 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	}
 
 	// 创建 Gin 路由
-	r := gin.Default()
+	r := gin.New()
 	// 应用中间件
-	r.Use(setServerHeader(), requestLoggerMiddleware())
+	r.Use(gin.Recovery(), requestLoggerMiddleware(), setServerHeader())
 
 	// 路由描述表
 	routeDesc := map[string]string{
@@ -914,6 +929,8 @@ func randomString(n int) string {
 }
 
 func main() {
+	gin.DisableConsoleColor()
+
 	// 从命令行参数获取端口号
 	if len(os.Args) < 2 {
 		fmt.Println("请提供一个或多个端口号")
