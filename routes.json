@@ -1,0 +1,235 @@
+[
+  {
+    "name": "获取用户信息",
+    "method": "GET",
+    "path": "/api/user",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "X-Custom-Header": "samwaf"
+    },
+    "response": {
+      "code": 0,
+      "message": "success",
+      "data": {
+        "userId": "U10086",
+        "username": "张三",
+        "email": "zhangsan@example.com",
+        "role": "admin"
+      }
+    }
+  },
+  {
+    "name": "用户登录",
+    "method": "POST",
+    "path": "/api/login",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    "response": {
+      "code": 0,
+      "message": "登录成功",
+      "data": {
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sample",
+        "expireIn": 7200
+      }
+    }
+  },
+  {
+    "name": "获取商品列表",
+    "method": "GET",
+    "path": "/api/products",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    "response": {
+      "code": 0,
+      "message": "success",
+      "total": 2,
+      "data": [
+        {
+          "id": 1,
+          "name": "商品A",
+          "price": 99.9,
+          "stock": 100
+        },
+        {
+          "id": 2,
+          "name": "商品B",
+          "price": 199.0,
+          "stock": 50
+        }
+      ]
+    }
+  },
+  {
+    "name": "模拟401未授权",
+    "method": "GET",
+    "path": "/api/secret",
+    "status": 401,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "WWW-Authenticate": "Bearer realm=\"api\""
+    },
+    "response": {
+      "code": 401,
+      "message": "未授权，请先登录"
+    }
+  },
+  {
+    "name": "提交订单",
+    "method": "POST",
+    "path": "/api/order",
+    "status": 201,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    "response": {
+      "code": 0,
+      "message": "订单创建成功",
+      "data": {
+        "orderId": "ORD-20260417-001",
+        "status": "pending",
+        "createTime": "2026-04-17T10:00:00+08:00"
+      }
+    }
+  },
+  {
+    "name": "删除资源",
+    "method": "DELETE",
+    "path": "/api/resource/:id",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    "response": {
+      "code": 0,
+      "message": "删除成功"
+    }
+  },
+  {
+    "name": "更新用户信息",
+    "method": "PUT",
+    "path": "/api/user/:id",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8"
+    },
+    "response": {
+      "code": 0,
+      "message": "更新成功",
+      "data": {
+        "userId": "U10086",
+        "updated": true
+      }
+    }
+  },
+  {
+    "name": "纯文本响应",
+    "method": "GET",
+    "path": "/api/ping",
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/plain; charset=utf-8"
+    },
+    "rawResponse": "pong"
+  },
+
+  {
+    "name": "IIS 默认欢迎页",
+    "method": "GET",
+    "path": "/iis",
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/html; charset=UTF-8",
+      "Server": "Microsoft-IIS/10.0",
+      "X-Powered-By": "ASP.NET",
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache",
+      "ETag": "\"77367615c64dc1:0\"",
+      "X-Xss-Protection": "1; mode=block"
+    },
+    "rawResponse": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\r\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\r\n<head>\r\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\r\n<title>IIS Windows Server</title>\r\n<style type=\"text/css\">\r\nbody{margin:0;font-family:Arial,Helvetica,sans-serif;background:#fff}\r\n#container{margin-left:auto;margin-right:auto;text-align:left;width:960px}\r\na img{border:none}\r\n</style>\r\n</head>\r\n<body>\r\n<div id=\"container\">\r\n<a href=\"http://go.microsoft.com/fwlink/?linkid=66138&amp;clcid=0x409\"><img src=\"/welcome/iisstart.png\" alt=\"IIS\" width=\"960\" height=\"600\" /></a>\r\n</div>\r\n</body>\r\n</html>"
+  },
+
+  {
+    "name": "IIS 404 未找到错误页",
+    "method": "GET",
+    "path": "/iis/404",
+    "status": 404,
+    "headers": {
+      "Content-Type": "text/html; charset=us-ascii",
+      "Server": "Microsoft-IIS/10.0",
+      "X-Powered-By": "ASP.NET"
+    },
+    "rawResponse": "<!DOCTYPE html><html><head><title>404 - File or directory not found.</title><style>body{margin:0;font-size:.7em;font-family:Verdana,Arial,Helvetica,sans-serif;background:#fff}fieldset{padding:0 15px 10px}h1{font-size:2.4em;margin:0;color:#4d0000}h2{font-size:1.7em;margin:0;color:#CC0000}h3{font-size:1.2em;margin:10px 0 0}#header{width:96%;margin:0 0 .5em;padding:10px 0 6px 2%;background-color:#003366}#header h1{color:#fff}#content{margin:0 0 0 2%;position:relative}#footer{color:#00f;font-size:.7em;font-style:italic;margin:1em 0;border-top:#ccc 1px solid}</style></head><body><div id=\"header\"><h1>Server Error</h1></div><div id=\"content\"><div class=\"content-container\"><fieldset><h2>404 - File or directory not found.</h2><h3>The resource you are looking for might have been removed, had its name changed, or is temporarily unavailable.</h3></fieldset></div></div><div id=\"footer\">Microsoft .NET Framework Version:4.0.30319; ASP.NET Version:4.8.4220.0</div></body></html>"
+  },
+
+  {
+    "name": "IIS 500 内部服务器错误页",
+    "method": "GET",
+    "path": "/iis/500",
+    "status": 500,
+    "headers": {
+      "Content-Type": "text/html; charset=us-ascii",
+      "Server": "Microsoft-IIS/10.0",
+      "X-Powered-By": "ASP.NET"
+    },
+    "rawResponse": "<!DOCTYPE html><html><head><title>500 - Internal server error.</title><style>body{margin:0;font-size:.7em;font-family:Verdana,Arial,Helvetica,sans-serif;background:#fff}fieldset{padding:0 15px 10px}h1{font-size:2.4em;margin:0;color:#4d0000}h2{font-size:1.7em;margin:0;color:#CC0000}h3{font-size:1.2em;margin:10px 0 0}#header{width:96%;margin:0 0 .5em;padding:10px 0 6px 2%;background-color:#003366}#header h1{color:#fff}#content{margin:0 0 0 2%;position:relative}#footer{color:#00f;font-size:.7em;font-style:italic;margin:1em 0;border-top:#ccc 1px solid}</style></head><body><div id=\"header\"><h1>Server Error</h1></div><div id=\"content\"><div class=\"content-container\"><fieldset><h2>500 - Internal server error.</h2><h3>There is a problem with the resource you are looking for, and it cannot be displayed.</h3></fieldset></div></div><div id=\"footer\">Microsoft .NET Framework Version:4.0.30319; ASP.NET Version:4.8.4220.0</div></body></html>"
+  },
+
+  {
+    "name": "IIS 401 未授权（Windows 认证）",
+    "method": "GET",
+    "path": "/iis/401",
+    "status": 401,
+    "headers": {
+      "Content-Type": "text/html; charset=us-ascii",
+      "Server": "Microsoft-IIS/10.0",
+      "X-Powered-By": "ASP.NET",
+      "WWW-Authenticate": "Negotiate, NTLM"
+    },
+    "rawResponse": "<!DOCTYPE html><html><head><title>401 - Unauthorized: Access is denied due to invalid credentials.</title><style>body{margin:0;font-size:.7em;font-family:Verdana,Arial,Helvetica,sans-serif;background:#fff}fieldset{padding:0 15px 10px}h1{font-size:2.4em;margin:0;color:#4d0000}h2{font-size:1.7em;margin:0;color:#CC0000}h3{font-size:1.2em;margin:10px 0 0}#header{width:96%;margin:0 0 .5em;padding:10px 0 6px 2%;background-color:#003366}#header h1{color:#fff}#content{margin:0 0 0 2%;position:relative}#footer{color:#00f;font-size:.7em;font-style:italic;margin:1em 0;border-top:#ccc 1px solid}</style></head><body><div id=\"header\"><h1>Server Error</h1></div><div id=\"content\"><div class=\"content-container\"><fieldset><h2>401 - Unauthorized: Access is denied due to invalid credentials.</h2><h3>You do not have permission to view this directory or page using the credentials that you supplied.</h3></fieldset></div></div><div id=\"footer\">Microsoft .NET Framework Version:4.0.30319; ASP.NET Version:4.8.4220.0</div></body></html>"
+  },
+
+  {
+    "name": "IIS ASP.NET Web API 响应",
+    "method": "GET",
+    "path": "/iis/api/data",
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json; charset=utf-8",
+      "Server": "Microsoft-IIS/10.0",
+      "X-Powered-By": "ASP.NET",
+      "X-AspNet-Version": "4.0.30319",
+      "X-AspNetMvc-Version": "5.2",
+      "Cache-Control": "no-cache",
+      "Pragma": "no-cache"
+    },
+    "response": {
+      "StatusCode": 200,
+      "Message": "OK",
+      "Data": {
+        "Id": 1,
+        "Name": "Sample Item",
+        "CreatedAt": "2026-04-17T10:00:00"
+      }
+    }
+  },
+
+  {
+    "name": "IIS 403 目录禁止访问",
+    "method": "GET",
+    "path": "/iis/403",
+    "status": 403,
+    "headers": {
+      "Content-Type": "text/html; charset=us-ascii",
+      "Server": "Microsoft-IIS/10.0",
+      "X-Powered-By": "ASP.NET"
+    },
+    "rawResponse": "<!DOCTYPE html><html><head><title>403 - Forbidden: Access is denied.</title><style>body{margin:0;font-size:.7em;font-family:Verdana,Arial,Helvetica,sans-serif;background:#fff}fieldset{padding:0 15px 10px}h1{font-size:2.4em;margin:0;color:#4d0000}h2{font-size:1.7em;margin:0;color:#CC0000}h3{font-size:1.2em;margin:10px 0 0}#header{width:96%;margin:0 0 .5em;padding:10px 0 6px 2%;background-color:#003366}#header h1{color:#fff}#content{margin:0 0 0 2%;position:relative}#footer{color:#00f;font-size:.7em;font-style:italic;margin:1em 0;border-top:#ccc 1px solid}</style></head><body><div id=\"header\"><h1>Server Error</h1></div><div id=\"content\"><div class=\"content-container\"><fieldset><h2>403 - Forbidden: Access is denied.</h2><h3>You do not have permission to view this directory or page using the credentials that you supplied.</h3></fieldset></div></div><div id=\"footer\">Microsoft .NET Framework Version:4.0.30319; ASP.NET Version:4.8.4220.0</div></body></html>"
+  }
+]
