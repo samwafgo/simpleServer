@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"net"
@@ -265,10 +268,112 @@ func truncateForLog(s string, limit int) string {
 	return s[:cut] + fmt.Sprintf("... [已截断，共 %d 字节]", len(s))
 }
 
+const (
+	uploadTestPath         = "/upload-test"
+	uploadTestMaxBodyBytes = 1 << 30
+	uploadTestForm         = `<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大文件上传校验</title>
+<h1>大文件上传校验</h1>
+<p>选择测试文件。上传后会返回实际接收的字节数、大小比对结果和 SHA-256。</p>
+<form method="post" action="/upload-test" enctype="multipart/form-data">
+  <label>测试文件 <input type="file" name="file" required></label>
+  <button type="submit">上传并校验</button>
+</form>
+<script>
+  const form = document.querySelector('form');
+  form.addEventListener('submit', () => {
+    form.action = '/upload-test?expected_bytes=' + form.elements.file.files[0].size;
+  });
+</script>
+</html>`
+)
+
+func receiveTestUpload(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	expected := int64(-1)
+	if value, exists := c.GetQuery("expected_bytes"); exists {
+		var err error
+		expected, err = strconv.ParseInt(value, 10, 64)
+		if err != nil || expected < 0 || expected > uploadTestMaxBodyBytes {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "expected_bytes 必须是有效的文件字节数"})
+			return
+		}
+	}
+
+	writeReadError := func(err error) {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "请求体超过测试接口上限", "max_body_bytes": uploadTestMaxBodyBytes})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "multipart 请求体读取失败或不完整"})
+	}
+
+	req := c.Request
+	if req.ContentLength > uploadTestMaxBodyBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "请求体超过测试接口上限", "max_body_bytes": uploadTestMaxBodyBytes})
+		return
+	}
+	req.Body = http.MaxBytesReader(c.Writer, req.Body, uploadTestMaxBodyBytes)
+	form, err := req.MultipartReader()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请使用 multipart/form-data 上传 file 字段"})
+		return
+	}
+	part, err := form.NextRawPart()
+	if err != nil {
+		writeReadError(err)
+		return
+	}
+	if part.FormName() != "file" || part.FileName() == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请上传一个 file 文件字段"})
+		return
+	}
+
+	hash := sha256.New()
+	size, err := io.Copy(hash, part)
+	if err != nil {
+		writeReadError(err)
+		return
+	}
+	if _, err := form.NextRawPart(); err != io.EOF {
+		if err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "仅支持上传一个文件"})
+			return
+		}
+		writeReadError(err)
+		return
+	}
+	if _, err := io.Copy(io.Discard, req.Body); err != nil {
+		writeReadError(err)
+		return
+	}
+
+	digest := fmt.Sprintf("%x", hash.Sum(nil))
+	result := gin.H{"received_bytes": size, "sha256": digest}
+	status := http.StatusOK
+	if expected >= 0 {
+		result["expected_bytes"] = expected
+		result["size_matches"] = size == expected
+		if size != expected {
+			status = http.StatusUnprocessableEntity
+		}
+	}
+	fmt.Printf("[上传校验] status=%d received_bytes=%d sha256=%s\n", status, size, digest)
+	c.JSON(status, result)
+}
+
 var requestLogSequence atomic.Uint64
 
 func requestLoggerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.FullPath() == uploadTestPath {
+			c.Next()
+			return
+		}
 		started := time.Now()
 		requestID := requestLogSequence.Add(1)
 		bodyBytes, _ := ioutil.ReadAll(c.Request.Body)
@@ -336,6 +441,8 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	routeDesc := map[string]string{
 		"GET /":                     "API 文档首页，列出所有路由",
 		"POST /postdata":            "回显请求 Body 原文",
+		"GET " + uploadTestPath:     "大文件上传校验页面",
+		"POST " + uploadTestPath:    "流式接收 multipart 文件，返回字节数和 SHA-256",
 		"GET /ws":                   "WebSocket 连接，每秒推送 'samwaf hello'",
 		"POST /events":              "Server-Sent Events，每秒推送 'samwaf hello event-stream'",
 		"POST /v1/responses":        "OpenAI Responses API（Codex 用这个），SSE 流式；复现 issue #954（?size=正文字节数&delta=小事件条数&gap=间隔ms）",
@@ -439,6 +546,12 @@ func startWebServer(port string, protocolType string, longTime bool) {
 		c.Header("Content-Type", "text/html; charset=utf-8")
 		c.String(200, html)
 	})
+
+	r.GET(uploadTestPath, func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(uploadTestForm))
+	})
+	r.POST(uploadTestPath, receiveTestUpload)
 
 	// 添加支持POST的接口
 	r.POST("/postdata", func(c *gin.Context) {
@@ -911,7 +1024,11 @@ func startWebServer(port string, protocolType string, longTime bool) {
 	} else {
 		fmt.Printf("在端口 %s 上启动 %s 服务器\n", port, strings.ToUpper(protocolType))
 	}
-	err := r.Run(":" + port)
+	addr := ":" + port
+	if _, _, err := net.SplitHostPort(port); err == nil {
+		addr = port
+	}
+	err := r.Run(addr)
 	if err != nil {
 		fmt.Printf("服务器在端口 %s 启动失败: %v\n", port, err)
 	}
